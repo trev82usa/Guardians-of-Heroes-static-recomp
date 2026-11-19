@@ -1,5 +1,9 @@
 # Guardian Heroes Recomp
 
+> [!IMPORTANT]
+> **STRICT VERSION REQUIREMENT — XBLA VERSION `0.0.0.2` ONLY**
+> This static recompilation **only works with version `0.0.0.2`** of *Guardian Heroes* (Xbox Live Arcade). Other builds (such as `0.0.0.3` / Title Update 1) have different PowerPC function addresses and **will not work**.
+
 A native **Linux and Windows** port of **Guardian Heroes** (Xbox Live Arcade, Treasure / SEGA, 2011)
 made by static recompilation with [ReXGlue](https://github.com/rexglue/rexglue-sdk). The game's
 Xbox 360 PowerPC code is translated to C++ and compiled into a normal program, with Xbox 360
