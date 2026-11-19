@@ -1,0 +1,37 @@
+# Guardian Heroes settings (ReXGlue options). Keep this file next to the guardianheroes program.
+# Most of these are also in the F1 menu, which saves its changes back into this file.
+
+# Speed (from the Trials HD port):
+# Host GPU occlusion queries make the CPU wait for the GPU on every query. Off = report every
+# query as visible, as upstream Xenia does by default.
+occlusion_query_enable = false
+# Reading GPU shader writes back to the CPU makes the CPU wait for the GPU. Off is upstream
+# Xenia's default.
+readback_memexport = false
+
+# Logging: "warn" keeps the log small. Use "info" or "debug" when reporting a problem.
+log_level = "warn"
+
+# Full game rather than the Xbox Live Arcade trial (also set in code).
+license_mask = 4294967295
+
+# Audio: SDL audio output (false = sound enabled)
+audio_mute = false
+
+# Controller: Cross-platform SDL gamepad backend
+input_backend = "sdl"
+
+# Frame limiter: 0 = off (normal), 60 = hold an exact 60 fps. Also in the F1 menu.
+gh_fps_cap = 0
+
+# Keyboard: ms for the stick/triggers to build up to full while a key is held (0 = instant).
+gh_keyboard_smoothing = 0
+
+# Players: false = each controller is its own player (up to 4 for co-op), keyboard is player 1.
+# true = every controller and the keyboard drive player 1.
+gh_all_controllers_player1 = false
+
+# System prompts (e.g. "No previous game data detected. Create new game data now?") are
+# answered automatically with their default button, so they never need a mouse click.
+# Set to false to see and answer them yourself (mouse).
+headless = true

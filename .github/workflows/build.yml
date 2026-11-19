@@ -1,0 +1,179 @@
+name: Build Guardian Heroes (Linux + Windows, ReXGlue)
+
+# Needs your own copy of the game executable at private/default.xex (version 0.0.0.3) and/or
+# private/v2/default.xex (version 0.0.0.2). This repo must stay private.
+on:
+  push:
+    paths: ["src/**", "private/**", "variants/**", "*.toml", "CMakeLists.txt", "CMakePresets.json", ".github/workflows/build.yml"]
+  workflow_dispatch:
+
+env:
+  REXGLUE_VERSION: 0.10.1
+
+jobs:
+  # The public repository has no game files, so there is nothing to build. In a private copy
+  # with private/default.xex (see README) the Linux and Windows builds run.
+  check:
+    runs-on: ubuntu-24.04
+    outputs:
+      have_xex: ${{ steps.xex.outputs.have_xex }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: xex
+        run: |
+          echo "have_xex=1" >> "$GITHUB_OUTPUT"
+  linux:
+    needs: check
+    if: needs.check.outputs.have_xex == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for the game executable
+        run: |
+          test -f private/default.xex || { echo "::error::private/default.xex is missing"; exit 1; }
+          mkdir -p game && cp private/default.xex game/default.xex
+          if [ -f private/v2/default.xex ]; then
+            mkdir -p variants/v2/game && cp private/v2/default.xex variants/v2/game/default.xex
+            echo "HAVE_V2=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Install Clang 20, Ninja, patchelf
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ninja-build patchelf libx11-dev libx11-xcb-dev libxcb1-dev
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh && sudo bash llvm.sh 20
+
+      - name: Download ReXGlue SDK
+        run: |
+          curl -sSL -o sdk.zip "https://github.com/rexglue/rexglue-sdk/releases/download/v${REXGLUE_VERSION}/rexglue-sdk-${REXGLUE_VERSION}-linux-amd64.zip"
+          unzip -q sdk.zip -d "$RUNNER_TEMP/rexsdk"
+          echo "REXSDK_PREFIX=$RUNNER_TEMP/rexsdk/linux-amd64" >> "$GITHUB_ENV"
+
+      - name: Codegen
+        run: |
+          chmod +x "$REXSDK_PREFIX/bin/rexglue"
+          "$REXSDK_PREFIX/bin/rexglue" codegen guardianheroes_manifest.toml 2>&1 | tee codegen.log
+          test "${PIPESTATUS[0]}" = 0
+
+      - name: Build
+        run: |
+          cmake --preset linux-amd64-release -DCMAKE_PREFIX_PATH="$REXSDK_PREFIX"
+          cmake --build out/build/linux-amd64-release
+
+      - name: Codegen + build for version 0.0.0.2
+        if: env.HAVE_V2 == '1'
+        working-directory: variants/v2
+        run: |
+          "$REXSDK_PREFIX/bin/rexglue" codegen guardianheroes_manifest.toml
+          cmake --preset linux-amd64-release -DCMAKE_PREFIX_PATH="$REXSDK_PREFIX"
+          cmake --build out/build/linux-amd64-release
+
+      - name: Package
+        run: tools/package_linux.sh .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GuardianHeroes-linux
+          path: GuardianHeroes-linux-x64.tar.gz
+          retention-days: 14
+
+  windows:
+    needs: check
+    if: needs.check.outputs.have_xex == '1'
+    runs-on: windows-2022
+    timeout-minutes: 180
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for the game executable
+        run: |
+          if (!(Test-Path private/default.xex)) { Write-Error "private/default.xex is missing"; exit 1 }
+          New-Item -ItemType Directory -Force game | Out-Null
+          Copy-Item private/default.xex game/default.xex
+          if (Test-Path private/v2/default.xex) {
+            New-Item -ItemType Directory -Force variants/v2/game | Out-Null
+            Copy-Item private/v2/default.xex variants/v2/game/default.xex
+            "HAVE_V2=1" | Out-File -FilePath $env:GITHUB_ENV -Append
+          }
+
+      - name: Install LLVM 20 and Ninja
+        run: |
+          choco install -y --no-progress llvm --version=20.1.8 --allow-downgrade
+          choco install -y --no-progress ninja
+          "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Download ReXGlue SDK
+        run: |
+          curl.exe -sSL -o sdk.zip "https://github.com/rexglue/rexglue-sdk/releases/download/v$env:REXGLUE_VERSION/rexglue-sdk-$env:REXGLUE_VERSION-win-amd64.zip"
+          Expand-Archive sdk.zip -DestinationPath "$env:RUNNER_TEMP\rexsdk"
+          "REXSDK_PREFIX=$env:RUNNER_TEMP\rexsdk\win-amd64" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Codegen
+        run: |
+          & "$env:REXSDK_PREFIX\bin\rexglue.exe" codegen guardianheroes_manifest.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build
+        run: |
+          clang --version
+          cmake --preset win-amd64-release "-DCMAKE_PREFIX_PATH=$env:REXSDK_PREFIX"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build out/build/win-amd64-release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Codegen + build for version 0.0.0.2
+        if: env.HAVE_V2 == '1'
+        working-directory: variants/v2
+        run: |
+          & "$env:REXSDK_PREFIX\bin\rexglue.exe" codegen guardianheroes_manifest.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --preset win-amd64-release "-DCMAKE_PREFIX_PATH=$env:REXSDK_PREFIX"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build out/build/win-amd64-release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the installer exe
+        run: |
+          python -m pip install --quiet pyinstaller
+          python -m PyInstaller --onefile --windowed --name GuardianHeroes-Installer --paths tools tools/install_game.py
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Package
+        run: |
+          $pkg = "GuardianHeroes"
+          New-Item -ItemType Directory -Force "$pkg/assets", "$pkg/tools" | Out-Null
+          Copy-Item out/build/win-amd64-release/*.exe, out/build/win-amd64-release/*.dll $pkg/
+          if (Test-Path variants/v2/out/build/win-amd64-release/guardianheroes-v2.exe) {
+            Copy-Item variants/v2/out/build/win-amd64-release/guardianheroes-v2.exe $pkg/
+          }
+          Copy-Item "$env:REXSDK_PREFIX\bin\rexruntime.dll" $pkg/ -ErrorAction SilentlyContinue
+          # Bundle the MSVC runtime so it runs without the VC++ redistributable installed.
+          $crt = Get-ChildItem "$env:VCToolsRedistDir\x64" -Directory -Filter "Microsoft.VC*.CRT" | Select-Object -First 1
+          if ($crt) { Copy-Item "$($crt.FullName)\msvcp140*.dll", "$($crt.FullName)\vcruntime140*.dll" $pkg/ }
+          Copy-Item packaging/README-linux.txt "$pkg/README.txt"
+          Copy-Item guardianheroes.toml, tools/stfs_extract.py -Destination $pkg/
+          Move-Item "$pkg/stfs_extract.py" "$pkg/tools/"
+          Copy-Item dist/GuardianHeroes-Installer.exe $pkg/
+          Copy-Item tools/install_game.py $pkg/
+          "Run GuardianHeroes-Installer.exe (next to the game) to fill this folder from your game package (see README.txt)." | Out-File "$pkg/assets/PUT_GAME_FILES_HERE.txt"
+          Get-ChildItem $pkg
+          Compress-Archive -Path $pkg -DestinationPath GuardianHeroes-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GuardianHeroes-windows
+          path: GuardianHeroes-windows-x64.zip
+          retention-days: 14

@@ -1,0 +1,7 @@
+# Hand-checked fixes for version 0.0.0.2 (same as ../../gh_fixes.toml for 0.0.0.3, at the
+# addresses of this build: everything here is 0x530 lower).
+# sub_826C6740: byte jump table without a bounds check; only two case bodies.
+[[switch_tables]]
+address = 0x826C6784
+register = 11
+labels = [0x826C67B8, 0x826C67B8, 0x826C67B8, 0x826C67B8, 0x826C67B8, 0x826C67B8, 0x826C67B8, 0x826C67B8, 0x826C67B8, 0x826C6788, 0x826C67B8, 0x826C67B8, 0x826C6788, 0x826C6788, 0x826C6788, 0x826C6788]

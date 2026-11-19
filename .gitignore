@@ -1,0 +1,22 @@
+# Game files: never commit anything from your copy of the game
+private/*
+!private/README.md
+extracted/
+game/
+game
+assets/
+*.xex
+*.xwb
+*.mrg
+*.mrgc
+*.wmv
+
+# Build output
+out/
+logs/
+generated/default/
+variants/*/game
+variants/*/out/
+variants/*/generated/default/
+*.tar.gz
+__pycache__/
